@@ -1,0 +1,8 @@
+{
+  "domain": "mbta-departures",
+  "name": "MBTA Departures",
+  "documentation": "",
+  "dependencies": [],
+  "codeowners": ["jacobswe"],
+  "requirements": []
+}
