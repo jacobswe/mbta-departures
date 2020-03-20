@@ -43,3 +43,6 @@ sensor:
 
 ## Inspirations and Thanks
 I wanted a lightweight and robust departure board for the MBTA. The amazing work of [mbta_predictions](https://github.com/dhanani94/mbta_predictions) was a great starting place, and in tandem with a little help from friends in understanding and accessing the API, this component was able to come to be. Thanks to all!
+
+## Known Bugs
+friendly_name does not flow through to attributes.
