@@ -16,7 +16,9 @@ CONF_LINE = "line"
 CONF_LIMIT = "limit"
 CONF_DIRECTION = 'direction'
 CONF_API_KEY = 'api_key'
-CONF_FRIENDLY_NAME = 'friendly_name'
+CONF_LABEL = 'label'
+
+metadata = {}
 
 SCAN_INTERVAL = timedelta(seconds=5)
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
@@ -26,8 +28,8 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
                 vol.Required(CONF_STATION): cv.string,
                 vol.Required(CONF_LINE): cv.string,
                 vol.Required(CONF_API_KEY): cv.string,
+                vol.Required(CONF_LABEL): cv.string,
                 vol.Optional(CONF_NAME): cv.string,
-                vol.Required(CONF_FRIENDLY_NAME): cv.string,
                 vol.Optional(CONF_DIRECTION, default=0): cv.positive_int,
                 vol.Optional(CONF_LIMIT, default=5): cv.positive_int
             }
@@ -39,6 +41,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
 # noinspection PyUnusedLocal,SpellCheckingInspection
 def setup_platform(hass, config, add_entities, discovery_info=None):
     """Set up the MBTA sensor"""
+    gen_metadata()
 
     sensors = []
     for next_train in config.get(CONF_PREDICTIONS):
@@ -48,22 +51,32 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
         name = next_train.get(CONF_NAME)
         direction = next_train.get(CONF_DIRECTION)
         api_key = next_train.get(CONF_API_KEY)
-        friendly_name = next_train.get(CONF_FRIENDLY_NAME)
+        label = next_train.get(CONF_LABEL)
 
-        sensors.append(MBTADeparture(station, line, direction, limit, api_key, name, friendly_name))
+        sensors.append(MBTADeparture(station, line, direction, limit, api_key, label, name))
     add_entities(sensors, True)
+
+def gen_metadata():
+    global metadata
+    res = requests.get("https://api-v3.mbta.com/routes?include=stop")
+    res.raise_for_status()
+    res_json = res.json()
+    for route in res_json['data']:
+        metadata[route['id']] = {
+            'color': route['attributes']['color']
+        }
 
 
 class MBTADeparture(Entity):
     """Implementation of an MBTA departure sensor"""
 
-    def __init__(self, station, line, direction, limit, api_key, name, friendly_name):
+    def __init__(self, station, line, direction, limit, api_key, label, name):
         """Initialize the sensor"""
         self._station = station
         self._line = line
         self._limit = limit
         self._direction = direction
-        self._friendly_name = friendly_name
+        self._label = label
         self._name = name if name else f"mbta_{self._station}_{self._line}".replace(' ', '_')
         self._arrivals = []
         self._alerts = []
@@ -78,9 +91,7 @@ class MBTADeparture(Entity):
             'alert_params': {
                 "filter[route]": self._line,
                 "filter[stop]": self._station,
-                "api_key": self._api_key},
-            'travel_time_min': 360,
-            'travel_time_max': 510,
+                "api_key": self._api_key}
         }
 
     @property
@@ -104,10 +115,11 @@ class MBTADeparture(Entity):
         return {
             "station": self._station,
             "upcoming_departures": self._arrivals[1:self._limit],
-            "friendly_name": self._friendly_name.replace('_', ' '),
+            "label": self._label.replace('_', ' '),
             "line": self._line,
             "alerts": self._alerts,
-            "direction": self._direction
+            "direction": self._direction,
+            "color": metadata[self._line]['color']
         }
 
     def get_alerts_string_list(self):
@@ -149,5 +161,6 @@ class MBTADeparture(Entity):
 
             self._arrivals = arrivals
             self._alerts = alerts
+
         except Exception as e:
             logging.exception(f"Encountered Exception: {e}")
