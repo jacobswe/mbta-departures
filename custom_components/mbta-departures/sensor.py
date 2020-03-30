@@ -19,21 +19,22 @@ CONF_API_KEY = 'api_key'
 CONF_LABEL = 'label'
 
 metadata = {}
+stopnames = {}
 
-SCAN_INTERVAL = timedelta(seconds=5)
+SCAN_INTERVAL = timedelta(seconds=8)
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
         vol.Optional(CONF_PREDICTIONS): [
             {
                 vol.Required(CONF_STATION): cv.string,
                 vol.Required(CONF_LINE): cv.string,
-                vol.Required(CONF_API_KEY): cv.string,
-                vol.Required(CONF_LABEL): cv.string,
+                vol.Optional(CONF_LABEL): cv.string,
                 vol.Optional(CONF_NAME): cv.string,
                 vol.Optional(CONF_DIRECTION, default=0): cv.positive_int,
                 vol.Optional(CONF_LIMIT, default=5): cv.positive_int
             }
-        ]
+        ],
+        vol.Required(CONF_API_KEY): cv.string
     }
 )
 
@@ -44,13 +45,13 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
     gen_metadata()
 
     sensors = []
+    api_key = config.get(CONF_API_KEY)
     for next_train in config.get(CONF_PREDICTIONS):
         station = next_train.get(CONF_STATION)
         line = next_train.get(CONF_LINE)
         limit = next_train.get(CONF_LIMIT)
         name = next_train.get(CONF_NAME)
         direction = next_train.get(CONF_DIRECTION)
-        api_key = next_train.get(CONF_API_KEY)
         label = next_train.get(CONF_LABEL)
 
         sensors.append(MBTADeparture(station, line, direction, limit, api_key, label, name))
@@ -58,13 +59,24 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
 
 def gen_metadata():
     global metadata
-    res = requests.get("https://api-v3.mbta.com/routes?include=stop")
+    res = requests.get("https://api-v3.mbta.com/routes")
     res.raise_for_status()
     res_json = res.json()
     for route in res_json['data']:
         metadata[route['id']] = {
-            'color': route['attributes']['color']
+            'color': route['attributes']['color'],
+            'destinations': route['attributes']['direction_destinations'],
+            'directions': route['attributes']['direction_names'],
+            'long_name': route['attributes']['long_name']
         }
+
+    global stopnames
+    res = requests.get("https://api-v3.mbta.com/stops")
+    res.raise_for_status()
+    res_json = res.json()
+    for stop in res_json['data']:
+        stopnames[stop['id']] = stop['attributes']['name']
+
 
 
 class MBTADeparture(Entity):
@@ -76,10 +88,15 @@ class MBTADeparture(Entity):
         self._line = line
         self._limit = limit
         self._direction = direction
-        self._label = label
-        self._name = name if name else f"mbta_{self._station}_{self._line}".replace(' ', '_')
+
+        self._label = label if label else f"""
+                     {metadata[self._line]['long_name']} to
+                     {metadata[self._line]['destinations'][self._direction]}"""
+        self._name = name.replace(' ', '_').lower() if name else f"mbta_{self._station}_{self._direction}"
+
         self._arrivals = []
         self._alerts = []
+
         self._api_key = api_key
 
         self._station_params = station_params = {
@@ -113,23 +130,26 @@ class MBTADeparture(Entity):
         """Return the state attributes """
         logging.debug("returing attributes")
         return {
-            "station": self._station,
-            "upcoming_departures": self._arrivals[1:self._limit],
+            "station": stopnames[self._station],
+            "upcoming_departures": self._arrivals[:self._limit],
             "label": self._label.replace('_', ' '),
-            "line": self._line,
-            "alerts": self._alerts,
-            "direction": self._direction,
-            "color": metadata[self._line]['color']
+            "line": metadata[self._line]['long_name'],
+            "direction": metadata[self._line]['destinations'][self._direction],
+            "color": metadata[self._line]['color'],
+            "alerts": self._alerts if len(self._alerts)>0 else ['No Alerts']
         }
 
     def get_alerts_string_list(self):
         response = requests.get("https://api-v3.mbta.com/alerts", params=self._station_params['alert_params'])
         response_json = json.loads(response.text)
 
-        alert_list = []
-        for alert in response_json["data"]:
-            alert_list.append(alert["attributes"]["header"])
-        return alert_list
+        if response and response.status_code == 200:
+            alert_list = []
+            for alert in response_json["data"]:
+                alert_list.append(alert["attributes"]["header"])
+            return alert_list
+        else:
+            return []
 
     def get_predictions_json(self):
         response = requests.get("https://api-v3.mbta.com/predictions", params=self._station_params['pred_params'])
@@ -142,25 +162,36 @@ class MBTADeparture(Entity):
     def update(self):
         """Get the latest data and update the state."""
         try:
-            response_json = self.get_predictions_json()
+            preds_json = self.get_predictions_json()
             alert_list = self.get_alerts_string_list()
 
-            arrivals = []
             current_time = datetime.now()
-            for prediction in response_json["data"][:self._limit]:
+
+            preds = []
+
+            for prediction in preds_json["data"]:
                 arrival_time = datetime.strptime(prediction["attributes"]["arrival_time"][:-6],
-                                                          '%Y-%m-%dT%H:%M:%S')
+                                                 '%Y-%m-%dT%H:%M:%S')
+                departure_time = datetime.strptime(prediction["attributes"]["departure_time"][:-6],
+                                                   '%Y-%m-%dT%H:%M:%S')
+                seconds_till_departure = (departure_time - current_time).total_seconds()
                 seconds_till_arrival = (arrival_time - current_time).total_seconds()
-                if seconds_till_arrival > 0:
-                    arrivals.append(arrival_time.strftime("%H:%M") + " Arrival in " + str(
-                        int(seconds_till_arrival // 60)) + "m" + str(round(seconds_till_arrival % 60)) + "s")
+                if seconds_till_departure > 0:
+                    preds.append({'Arrival':arrival_time.strftime("%H:%M:%S"),
+                                  'Departure':departure_time.strftime('%H:%M:%S'),
+                                  'Until': str(int(seconds_till_departure // 60)) +
+                                           "m" + str(round(seconds_till_departure % 60)) +
+                                           "s",
+                                  'Is Boarding': seconds_till_arrival<0})
 
             alerts = []
             for alert in alert_list:
                 alerts.append(alert)
 
-            self._arrivals = arrivals
+            self._arrivals = list({a['Until']:a for a in preds}.values())
             self._alerts = alerts
+
+            return preds
 
         except Exception as e:
             logging.exception(f"Encountered Exception: {e}")
