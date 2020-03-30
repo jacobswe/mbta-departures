@@ -25,17 +25,17 @@ sensor:
 ### Configuration Variables
 #### api_key
 > (string) (Required) the API key given to you by the [mbta api site](https://api-v3.mbta.com/)
-#### prediction
+#### predictions
 > (list) (Required) list of sensors to be created
-  #### station
+  #### - station
   > (string) (Required) the MBTA name of your station. See [mbta stops](https://mbta.com/stops). See also [stops.csv](https://github.com/jacobswe/mbta-departures/blob/master/reference/stops.csv) for the full list of available stops.
-  #### line
+  #### - line
   > (string) (Required) the `route_id` of the line you are using (e.g. `Green-C`). See [routes.csv](https://github.com/jacobswe/mbta-departures/blob/master/reference/routes.csv) for the full list of available lines.
-  #### label
+  #### - label
   > (string) (Required) A label to display in place of the LINE to TERIMINAL STATION.
-  #### name
+  #### - name
   > (string) (Optional) the name of the sensor (default: "mbta_STATION_LINE_DIRECTION")
-  #### limit
+  #### - limit
   > (int) (Optional) the maximum number of predictions to send back (default: `5`)
-  #### direction
+  #### - direction
   > (int) (Optional) the direction of the train `0` or `1` (default: `0`)
