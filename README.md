@@ -39,10 +39,4 @@ sensor:
 #### direction
 > (int) (Optional) the direction of the train `0` or `1` (default: `0`)
 #### api_key
-> (string) (Required) the API key given to you by the [mbta api site](https://api-v3.mbta.com/).
-
-## Inspirations and Thanks
-I wanted a lightweight and robust departure board for the MBTA. The amazing work of [mbta_predictions](https://github.com/dhanani94/mbta_predictions) was a great starting place, and in tandem with a little help from friends in understanding and accessing the API, this component was able to come to be. Thanks to all!
-
-## Known Bugs
-friendly_name does not flow through to attributes.
+> (string) (Required) the API key given to you by the [mbta api site](https://api-v3.mbta.com/)
