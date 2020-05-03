@@ -47,21 +47,37 @@ class MBTACard extends HTMLElement {
                     </div>`;
 
       stop_array.forEach(function(stop) {
-				let arrival = stop['Arrival']
-				let departure = stop['Departure']
-				let until = stop['Until']
-				let boarding = stop['Is Boarding']
+				let arrival = stop['Arrival'];
+				let departure = stop['Departure'];
+				let until = stop['Until'];
+				let boarding = stop['Is Boarding'];
+				let is_pred = stop['Prediction'];
+				let is_live = `${is_pred}`;
 
         if (boarding) {
 					tablehtml += `<tr>
-                        <td class="img"><img width="20px" src="/local/community/mbta-card-master/images/MBTA.png"></td>
-                        <td class="expand" style="text-align:center;">Boarding</td>
+												<td class="img">`
+
+					if (is_pred){
+						tablehtml += `<td class="img"><img width="20px" src="/local/community/mbta-card-master/images/MBTA-live.png"></td>`;
+					} else {
+						tablehtml += `<td class="img"><img width="20px" src="/local/community/mbta-card-master/images/MBTA.png"></td>`;
+					}
+
+					tablehtml += `<td class="expand" style="text-align:center;">Boarding</td>
                         <td style="text-align:center;">${until}</td>
                         </tr>`;
 				} else {
 					tablehtml += `<tr>
-                        <td class="img"><img width="20px" src="/local/community/mbta-card-master/images/MBTA.png"></td>
-                        <td class="expand" style="text-align:center;">Arrival: ${arrival.substring(0,5)}</td>
+                        <td class="img">`
+
+					if (is_pred){
+						tablehtml += `<td class="img"><img width="20px" src="/local/community/mbta-card-master/images/MBTA-live.png"></td>`;
+					} else {
+						tablehtml += `<td class="img"><img width="20px" src="/local/community/mbta-card-master/images/MBTA.png"></td>`;
+					}
+
+					tablehtml += `<td class="expand" style="text-align:center;">Arrival: ${arrival.substring(0,5)}</td>
                         <td class="contract" style="text-align:center;">${until}</td>
                         </tr>`;
 				}
